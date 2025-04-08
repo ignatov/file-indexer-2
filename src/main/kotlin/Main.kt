@@ -1,12 +1,15 @@
 package org.example
 
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import org.example.core.DirectoryWatcher
 import org.example.core.FileIndexer
 import org.example.core.IndexService
-import java.nio.file.Path
+import java.nio.file.Files
 import java.nio.file.Paths
+import kotlin.io.path.isRegularFile
 import kotlin.system.exitProcess
 
 /**
@@ -15,6 +18,19 @@ import kotlin.system.exitProcess
  */
 class FileIndexerRepl(private val indexService: IndexService) {
     private val directoryWatcher = DirectoryWatcher(indexService)
+
+    /**
+     * Expands a path that starts with "~" to the user's home directory.
+     * @param path The path that may start with "~"
+     * @return The expanded path
+     */
+    private fun expandTilde(path: String): String {
+        if (path.startsWith("~")) {
+            val userHome = System.getProperty("user.home")
+            return path.replaceFirst("~", userHome)
+        }
+        return path
+    }
 
     /**
      * Starts the REPL loop.
@@ -79,7 +95,8 @@ class FileIndexerRepl(private val indexService: IndexService) {
             return
         }
 
-        val filePath = Paths.get(path)
+        val expandedPath = expandTilde(path)
+        val filePath = Paths.get(expandedPath)
 
         if (filePath.toFile().isDirectory) {
             val count = indexService.addDirectory(filePath, recursive)
@@ -133,23 +150,48 @@ class FileIndexerRepl(private val indexService: IndexService) {
      * Handles the 'watch' command.
      * @param args Command arguments
      */
-    private fun handleWatchCommand(args: String) {
+    private suspend fun handleWatchCommand(args: String) {
         if (args.isBlank()) {
             println("Usage: watch <directory_path>")
             return
         }
 
         val path = args.trim()
-        val directoryPath = Paths.get(path)
+        val expandedPath = expandTilde(path)
+        val directoryPath = Paths.get(expandedPath)
 
         if (!directoryPath.toFile().isDirectory) {
             println("Not a directory: $path")
             return
         }
 
+        println("Starting to watch directory: $path (expanded to: $expandedPath)")
+        val start = System.currentTimeMillis()
         val success = directoryWatcher.watchDirectory(directoryPath)
         if (success) {
+            println("Successfully set up directory watcher for: $path")
+
+            // Count files in the directory before indexing
+            val fileCount = withContext(Dispatchers.IO) {
+                Files.walk(directoryPath).use { paths ->
+                    paths.filter { it.isRegularFile() }.count()
+                }
+            }
+            println("Found $fileCount files in directory: $path")
+
+            // Index existing files in the directory
+            println("Starting to index existing files...")
+            val count = indexService.addDirectory(directoryPath, true)
+            val duration = System.currentTimeMillis() - start
+
             println("Now watching directory: $path")
+            println("Indexed $count existing files in the directory, took $duration ms.")
+
+            if (count == 0 && fileCount > 0) {
+                println("Note: No files were indexed despite finding $fileCount files in the directory.")
+                println("This may be because none of the files are recognized as text files or they don't contain extractable text.")
+                println("Check the logs above for more details on why files were skipped.")
+            }
         } else {
             println("Failed to watch directory: $path")
         }
@@ -166,7 +208,8 @@ class FileIndexerRepl(private val indexService: IndexService) {
         }
 
         val path = args.trim()
-        val directoryPath = Paths.get(path)
+        val expandedPath = expandTilde(path)
+        val directoryPath = Paths.get(expandedPath)
 
         val success = directoryWatcher.stopWatching(directoryPath)
         if (success) {
