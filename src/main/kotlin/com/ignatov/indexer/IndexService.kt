@@ -1,4 +1,4 @@
-package org.example.core
+package com.ignatov.indexer
 
 import kotlinx.coroutines.flow.Flow
 import java.nio.file.Path

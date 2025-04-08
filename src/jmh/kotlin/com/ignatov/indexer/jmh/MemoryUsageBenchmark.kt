@@ -1,9 +1,9 @@
-package org.example.benchmarks
+package com.ignatov.indexer.jmh
 
+import com.ignatov.indexer.FileIndexer
+import com.ignatov.indexer.WordIndex
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
-import org.example.core.FileIndexer
-import org.example.core.WordIndex
 import org.openjdk.jmh.annotations.*
 import org.openjdk.jmh.infra.Blackhole
 import java.nio.file.Files

@@ -1,4 +1,4 @@
-package org.example.core
+package com.ignatov.indexer
 
 import io.methvin.watcher.DirectoryChangeEvent
 import io.methvin.watcher.DirectoryChangeListener

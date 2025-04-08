@@ -1,4 +1,4 @@
-package org.example.core
+package com.ignatov.indexer
 
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest

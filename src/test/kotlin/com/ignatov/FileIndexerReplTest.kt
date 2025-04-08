@@ -1,5 +1,7 @@
-package org.example
+package com.ignatov
 
+import com.ignatov.indexer.FileIndexer
+import org.example.FileIndexerRepl
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 
@@ -15,7 +17,7 @@ class FileIndexerReplTest {
         expandTildeMethod.isAccessible = true
         
         // Create an instance of FileIndexerRepl
-        val indexService = org.example.core.FileIndexer()
+        val indexService = FileIndexer()
         val replInstance = FileIndexerRepl(indexService)
         
         // Test with a path starting with ~

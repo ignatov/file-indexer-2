@@ -44,7 +44,7 @@ This will run all benchmarks and generate a report in the `build/reports/jmh/res
 To run a specific benchmark, use:
 
 ```bash
-./gradlew jmh -PjmhInclude=org.example.benchmarks.FileIndexerBenchmark.benchmarkIndexSmallFiles
+./gradlew jmh -PjmhInclude=com.ignatov.indexer.jmh.FileIndexerBenchmark.benchmarkIndexSmallFiles
 ```
 
 ## Interpreting Results

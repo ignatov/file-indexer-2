@@ -1,12 +1,12 @@
 package org.example
 
+import com.ignatov.indexer.DirectoryWatcher
+import com.ignatov.indexer.FileIndexer
+import com.ignatov.indexer.IndexService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
-import org.example.core.DirectoryWatcher
-import org.example.core.FileIndexer
-import org.example.core.IndexService
 import java.nio.file.Files
 import java.nio.file.Paths
 import kotlin.io.path.isRegularFile

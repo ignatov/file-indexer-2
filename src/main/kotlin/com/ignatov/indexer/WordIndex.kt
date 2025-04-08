@@ -1,4 +1,4 @@
-package org.example.core
+package com.ignatov.indexer
 
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap

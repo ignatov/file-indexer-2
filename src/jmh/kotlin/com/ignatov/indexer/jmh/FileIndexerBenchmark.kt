@@ -1,19 +1,17 @@
-package org.example.benchmarks
+package com.ignatov.indexer.jmh
 
-import org.example.core.FileIndexer
-import org.example.core.WordIndex
-import org.openjdk.jmh.annotations.*
-import org.openjdk.jmh.infra.Blackhole
-import java.io.File
-import java.nio.file.Files
-import java.nio.file.Path
-import java.util.concurrent.TimeUnit
-import kotlin.io.path.createDirectories
-import kotlin.io.path.createFile
-import kotlin.io.path.writeText
+import com.ignatov.indexer.FileIndexer
+import com.ignatov.indexer.WordIndex
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import org.openjdk.jmh.annotations.*
+import org.openjdk.jmh.infra.Blackhole
+import java.nio.file.Files
+import java.nio.file.Path
+import java.util.concurrent.TimeUnit
+import kotlin.io.path.createFile
+import kotlin.io.path.writeText
 
 /**
  * Performance benchmarks for the File Indexer project.
