@@ -2,13 +2,13 @@ package org.example.core
 
 import io.methvin.watcher.DirectoryChangeEvent
 import io.methvin.watcher.DirectoryChangeListener
-import io.methvin.watcher.DirectoryWatcher as JDirectoryWatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
+import io.methvin.watcher.DirectoryWatcher as JDirectoryWatcher
 
 /**
  * Watches directories for file changes and updates the index accordingly.
@@ -33,6 +33,7 @@ class DirectoryWatcher(private val indexService: IndexService) {
             val watcher = JDirectoryWatcher.builder()
                 .path(directoryPath)
                 .listener(createDirectoryChangeListener())
+                .fileHashing(false)
                 .build()
             
             watchers[directoryPath] = watcher

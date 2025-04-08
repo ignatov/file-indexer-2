@@ -34,7 +34,7 @@ class FileIndexer : IndexService {
                 .filter { it.isNotEmpty() }
                 .map { it.lowercase() }
         } catch (e: IOException) {
-            log.debug("Error reading file $filePath: ${e.message}")
+            log.trace("Error reading file $filePath: ${e.message}")
             return@withContext emptyList()
         }
     }
@@ -61,24 +61,24 @@ class FileIndexer : IndexService {
                 val fileSize = Files.size(filePath)
                 // Consider files smaller than 1MB without extension as potential text files
                 if (fileSize < 1024 * 1024) {
-                    log.debug("Treating file without extension as text file: $filePath (size: $fileSize bytes)")
+                    log.trace("Treating file without extension as text file: $filePath (size: $fileSize bytes)")
                     return true
                 }
             } catch (e: IOException) {
-                log.debug("Error checking file size for $filePath: ${e.message}")
+                log.trace("Error checking file size for $filePath: ${e.message}")
             }
         }
 
         val isText = extension in textExtensions
         if (!isText && extension.isNotEmpty()) {
-            log.debug("Skipping non-text file: $filePath (extension: $extension)")
+            log.trace("Skipping non-text file: $filePath (extension: $extension)")
         }
         return isText
     }
 
     override suspend fun addFile(filePath: Path): Boolean {
         if (!Files.exists(filePath) || !filePath.isRegularFile()) {
-            log.debug("Skipping non-existent or non-regular file: $filePath")
+            log.trace("Skipping non-existent or non-regular file: $filePath")
             return false
         }
 
@@ -89,21 +89,21 @@ class FileIndexer : IndexService {
 
         val words = extractWords(filePath)
         if (words.isEmpty()) {
-            log.debug("Skipping file with no extractable words: $filePath")
+            log.trace("Skipping file with no extractable words: $filePath")
             return false
         }
 
         wordIndex.addWords(words, filePath)
-        log.debug("Added file to index: $filePath (${words.size} words)")
+        log.trace("Added file to index: $filePath (${words.size} words)")
         return true
     }
 
     override suspend fun addDirectory(directoryPath: Path, recursive: Boolean): Int {
         if (!Files.exists(directoryPath) || !directoryPath.isDirectory()) {
-            log.debug("Directory does not exist or is not a directory: $directoryPath")
+            log.trace("Directory does not exist or is not a directory: $directoryPath")
             return 0
         }
-        log.debug("Scanning directory: $directoryPath (recursive: $recursive)")
+        log.trace("Scanning directory: $directoryPath (recursive: $recursive)")
 
         var totalFiles = 0
         val filePathFlow = flow<Path> {
@@ -112,7 +112,7 @@ class FileIndexer : IndexService {
                     if (path.isRegularFile()) {
                         val inScope = if (recursive) true else (path.parent == directoryPath)
                         if (!inScope) {
-                            log.debug("Skipping file outside scope: $path")
+                            log.trace("Skipping file outside scope: $path")
                         }
                         if (inScope && !path.iterator().asSequence().any { it.toString() == ".git" }) {
                             totalFiles++
@@ -132,7 +132,7 @@ class FileIndexer : IndexService {
             .filter { it }  // Only count files that were successfully indexed
             .count()
 
-        log.debug("Successfully indexed $successCount out of $totalFiles files in directory: $directoryPath")
+        log.trace("Successfully indexed $successCount out of $totalFiles files in directory: $directoryPath")
         return successCount
     }
 

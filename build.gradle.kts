@@ -15,7 +15,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
 
     // File watching library
-    implementation("io.methvin:directory-watcher:0.18.0")
+    implementation("io.methvin:directory-watcher:0.19.0")
 
     // Logging
     implementation("org.slf4j:slf4j-api:2.0.9")
