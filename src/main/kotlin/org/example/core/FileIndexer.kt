@@ -1,13 +1,14 @@
 package org.example.core
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.io.path.isDirectory
 import kotlin.io.path.isRegularFile
 import kotlin.io.path.name
@@ -16,6 +17,7 @@ import kotlin.io.path.name
  * Implementation of IndexService that indexes text files by words.
  */
 class FileIndexer : IndexService {
+    private val log: Logger = LoggerFactory.getLogger(FileIndexer::class.java)
     private val wordIndex = WordIndex()
     private val isTextFile = AtomicBoolean(true) // Default to true for simplicity
 
@@ -32,7 +34,7 @@ class FileIndexer : IndexService {
                 .filter { it.isNotEmpty() }
                 .map { it.lowercase() }
         } catch (e: IOException) {
-            println("Error reading file $filePath: ${e.message}")
+            log.debug("Error reading file $filePath: ${e.message}")
             return@withContext emptyList()
         }
     }
@@ -59,24 +61,24 @@ class FileIndexer : IndexService {
                 val fileSize = Files.size(filePath)
                 // Consider files smaller than 1MB without extension as potential text files
                 if (fileSize < 1024 * 1024) {
-                    println("Treating file without extension as text file: $filePath (size: $fileSize bytes)")
+                    log.debug("Treating file without extension as text file: $filePath (size: $fileSize bytes)")
                     return true
                 }
             } catch (e: IOException) {
-                println("Error checking file size for $filePath: ${e.message}")
+                log.debug("Error checking file size for $filePath: ${e.message}")
             }
         }
 
         val isText = extension in textExtensions
         if (!isText && extension.isNotEmpty()) {
-//            println("Skipping non-text file: $filePath (extension: $extension)")
+            log.debug("Skipping non-text file: $filePath (extension: $extension)")
         }
         return isText
     }
 
     override suspend fun addFile(filePath: Path): Boolean {
         if (!Files.exists(filePath) || !filePath.isRegularFile()) {
-            println("Skipping non-existent or non-regular file: $filePath")
+            log.debug("Skipping non-existent or non-regular file: $filePath")
             return false
         }
 
@@ -87,59 +89,51 @@ class FileIndexer : IndexService {
 
         val words = extractWords(filePath)
         if (words.isEmpty()) {
-            println("Skipping file with no extractable words: $filePath")
+            log.debug("Skipping file with no extractable words: $filePath")
             return false
         }
 
         wordIndex.addWords(words, filePath)
-//        println("Added file to index: $filePath (${words.size} words)")
+        log.debug("Added file to index: $filePath (${words.size} words)")
         return true
     }
 
     override suspend fun addDirectory(directoryPath: Path, recursive: Boolean): Int {
         if (!Files.exists(directoryPath) || !directoryPath.isDirectory()) {
-            println("Directory does not exist or is not a directory: $directoryPath")
+            log.debug("Directory does not exist or is not a directory: $directoryPath")
             return 0
         }
+        log.debug("Scanning directory: $directoryPath (recursive: $recursive)")
 
-        println("Scanning directory: $directoryPath (recursive: $recursive)")
-        var count = 0
         var totalFiles = 0
-
-        // Collect all file paths first
-        val filePaths = withContext(Dispatchers.IO) {
-            Files.walk(directoryPath).use { paths ->
-                paths.filter { path ->
-                    val isFile = path.isRegularFile()
-                    val inScope = (!recursive && path.parent == directoryPath) || recursive
-
-                    // Check if any part of the path is a .git directory
-                    val containsGitDir = path.iterator().asSequence().any { it.toString() == ".git" }
-                    if (containsGitDir) {
-                        println("Skipping file in .git directory: $path")
-                        return@filter false
+        val filePathFlow = flow<Path> {
+            Files.walk(directoryPath).use { stream ->
+                for (path in stream) {
+                    if (path.isRegularFile()) {
+                        val inScope = if (recursive) true else (path.parent == directoryPath)
+                        if (!inScope) {
+                            log.debug("Skipping file outside scope: $path")
+                        }
+                        if (inScope && !path.iterator().asSequence().any { it.toString() == ".git" }) {
+                            totalFiles++
+                            emit(path)
+                        }
                     }
-
-                    if (isFile && !inScope) {
-                        println("Skipping file outside scope: $path")
-                    }
-                    isFile && inScope
-                }.toList()
+                }
             }
-        }
+        }.flowOn(Dispatchers.IO)
 
-        totalFiles = filePaths.size
-        println("Found $totalFiles files in directory: $directoryPath")
-
-        // Process each file
-        for (path in filePaths) {
-            if (addFile(path)) {
-                count++
+        val workerCount = Runtime.getRuntime().availableProcessors()
+        val successCount = filePathFlow
+            .flatMapMerge(concurrency = workerCount) { path ->
+                // For each file path, emit the result of addFile concurrently
+                flow { emit(addFile(path)) }
             }
-        }
+            .filter { it }  // Only count files that were successfully indexed
+            .count()
 
-        println("Successfully indexed $count out of $totalFiles files in directory: $directoryPath")
-        return count
+        log.debug("Successfully indexed $successCount out of $totalFiles files in directory: $directoryPath")
+        return successCount
     }
 
     override suspend fun findFilesWithWord(word: String): List<Path> {
@@ -159,20 +153,30 @@ class FileIndexer : IndexService {
             return 0
         }
 
-        var count = 0
-
-        val filesToRemove = wordIndex.getAllFiles().filter { 
+        val filesToRemove = wordIndex.getAllFiles().filter {
             it.startsWith(directoryPath)
         }
 
-        // Process each file
-        for (filePath in filesToRemove) {
-            if (removeFile(filePath)) {
-                count++
-            }
-        }
+        // Process files in parallel
+        return coroutineScope {
+            val successCounter = AtomicInteger(0)
 
-        return count
+            // Create a list of deferred results
+            val deferredResults = filesToRemove.map { filePath ->
+                async(Dispatchers.IO) {
+                    val success = removeFile(filePath)
+                    if (success) {
+                        successCounter.incrementAndGet()
+                    }
+                }
+            }
+
+            // Wait for all async operations to complete
+            deferredResults.awaitAll()
+
+            // Return the final count
+            successCounter.get()
+        }
     }
 
     override suspend fun clearIndex() {
